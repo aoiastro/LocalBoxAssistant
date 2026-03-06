@@ -1,6 +1,6 @@
 import Foundation
 
-enum ChatRole {
+enum ChatRole: Equatable {
     case user
     case assistant
 }

@@ -26,7 +26,11 @@ actor HuggingFaceModelDownloader {
     func ensureModelDownloaded(config: HFModelConfig) async throws -> URL {
         let rootDirectory = try appModelsDirectory()
         let modelDirectory = rootDirectory.appendingPathComponent(safeModelDirectoryName(config.repoID), isDirectory: true)
-        try fileManager.createDirectory(at: modelDirectory, withIntermediateDirectories: true)
+        try fileManager.createDirectory(
+            at: modelDirectory,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
 
         let marker = modelDirectory.appendingPathComponent(".download-complete", isDirectory: false)
         if fileManager.fileExists(atPath: marker.path) {
@@ -120,7 +124,8 @@ actor HuggingFaceModelDownloader {
 
         try fileManager.createDirectory(
             at: destination.deletingLastPathComponent(),
-            withIntermediateDirectories: true
+            withIntermediateDirectories: true,
+            attributes: nil
         )
 
         let encodedRemotePath = remotePath
@@ -151,7 +156,11 @@ actor HuggingFaceModelDownloader {
             throw LocalLLMError.modelDownloadFailed("Application Support directory unavailable")
         }
         let modelsDirectory = appSupport.appendingPathComponent("Models", isDirectory: true)
-        try fileManager.createDirectory(at: modelsDirectory, withIntermediateDirectories: true)
+        try fileManager.createDirectory(
+            at: modelsDirectory,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
         return modelsDirectory
     }
 
