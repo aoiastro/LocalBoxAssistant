@@ -214,11 +214,11 @@ private struct SettingsView: View {
 
                 Section("Sampling") {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Temperature: \(options.temperature, specifier: \"%.2f\")")
+                        Text("Temperature: \(options.temperature, specifier: "%.2f")")
                         Slider(value: $options.temperature, in: 0...1.5, step: 0.05)
                     }
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Top P: \(options.topP, specifier: \"%.2f\")")
+                        Text("Top P: \(options.topP, specifier: "%.2f")")
                         Slider(value: $options.topP, in: 0.1...1.0, step: 0.05)
                     }
                 }
@@ -232,7 +232,7 @@ private struct SettingsView: View {
                         step: 32
                     )
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Repetition Penalty: \(options.repetitionPenalty, specifier: \"%.2f\")")
+                        Text("Repetition Penalty: \(options.repetitionPenalty, specifier: "%.2f")")
                         Slider(value: $options.repetitionPenalty, in: 1.0...1.5, step: 0.01)
                     }
                 }

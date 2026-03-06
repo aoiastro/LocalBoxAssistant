@@ -79,9 +79,13 @@ final class ChatViewModel: ObservableObject {
                     history: requestHistory,
                     userInput: trimmed,
                     options: selectedOptions
-                ) { [weak self] token in
+                ) { token in
                     await MainActor.run {
-                        self?.appendToken(token, conversationID: conversationID, assistantMessageID: assistantMessageID)
+                        self.appendToken(
+                            token,
+                            conversationID: conversationID,
+                            assistantMessageID: assistantMessageID
+                        )
                     }
                 }
 
@@ -159,7 +163,7 @@ final class ChatViewModel: ObservableObject {
             let initialConversation = ChatConversation.initial()
             conversations = [initialConversation]
             selectedConversationID = initialConversation.id
-        } else if let selectedConversationID, deletedSet.contains(selectedConversationID) {
+        } else if let currentSelectedID = selectedConversationID, deletedSet.contains(currentSelectedID) {
             selectedConversationID = conversations.sorted { $0.updatedAt > $1.updatedAt }.first?.id
         }
 
