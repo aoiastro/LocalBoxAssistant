@@ -97,7 +97,6 @@ final class MLXChatService: LocalLLMService {
             return cachedContainer
         }
 
-        Memory.cacheLimit = 32 * 1024 * 1024
         let configuration = ModelConfiguration(directory: directory)
         let container = try await LLMModelFactory.shared.loadContainer(configuration: configuration)
         cachedContainer = container
