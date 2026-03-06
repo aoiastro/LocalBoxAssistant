@@ -14,52 +14,84 @@ import MLXLMCommon
 
 enum LocalLLMError: LocalizedError {
     case emptyInput
+    case invalidModelID
     case modelDownloadFailed(String)
     case generationFailed(String)
+    case memoryStoreFailed(String)
 
     var errorDescription: String? {
         switch self {
         case .emptyInput:
             return "入力が空です。"
+        case .invalidModelID:
+            return "HF Model ID が空です。例: mlx-community/Qwen2.5-1.5B-Instruct-4bit"
         case .modelDownloadFailed(let detail):
             return "モデルのダウンロードに失敗しました: \(detail)"
         case .generationFailed(let detail):
             return "生成に失敗しました: \(detail)"
+        case .memoryStoreFailed(let detail):
+            return "メモリ保存に失敗しました: \(detail)"
         }
     }
 }
 
 final class MLXChatService: LocalLLMService {
     private let downloader = HuggingFaceModelDownloader()
-    private let modelConfig: HFModelConfig
-    private let systemPrompt = "あなたは端的で正確なアシスタントです。"
 
     #if canImport(MLX) && canImport(MLXLLM) && canImport(MLXLMCommon)
-    private var cachedContainer: ModelContainer?
+    private var cachedContainers: [String: ModelContainer] = [:]
     #endif
 
-    init(modelConfig: HFModelConfig = .default) {
-        self.modelConfig = modelConfig
-    }
+    init() {}
 
     func generateReply(history: [ChatMessage], userInput: String) async throws -> String {
+        try await generateReply(history: history, userInput: userInput, options: .default, onToken: nil)
+    }
+
+    func generateReply(
+        history: [ChatMessage],
+        userInput: String,
+        options: GenerationOptions,
+        onToken: (@Sendable (String) async -> Void)?
+    ) async throws -> String {
         let prompt = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else {
             throw LocalLLMError.emptyInput
         }
 
+        let modelID = options.modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !modelID.isEmpty else {
+            throw LocalLLMError.invalidModelID
+        }
+
+        let modelRevision = options.modelRevision.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "main"
+            : options.modelRevision.trimmingCharacters(in: .whitespacesAndNewlines)
+        let token = options.hfToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        let modelConfig = HFModelConfig(
+            repoID: modelID,
+            revision: modelRevision,
+            files: nil,
+            token: token.isEmpty ? nil : token
+        )
+
         let localModelDirectory = try await downloader.ensureModelDownloaded(config: modelConfig)
 
         #if canImport(MLX) && canImport(MLXLLM) && canImport(MLXLMCommon)
-        let container = try await loadModelContainer(from: localModelDirectory)
-        let chatMessages = buildChatMessages(history: history, latestUserInput: prompt)
+        let cacheKey = "\(modelConfig.repoID)@\(modelConfig.revision)"
+        let container = try await loadModelContainer(from: localModelDirectory, cacheKey: cacheKey)
+        let chatMessages = buildChatMessages(
+            history: history,
+            latestUserInput: prompt,
+            systemPrompt: options.systemPrompt
+        )
         let input = UserInput(chat: chatMessages)
         let parameters = GenerateParameters(
-            maxTokens: 512,
-            temperature: 0.7,
-            topP: 0.9,
-            repetitionPenalty: 1.05,
-            repetitionContextSize: 128
+            maxTokens: options.maxTokens,
+            temperature: Float(options.temperature),
+            topP: Float(options.topP),
+            repetitionPenalty: Float(options.repetitionPenalty),
+            repetitionContextSize: options.repetitionContextSize
         )
 
         let responseText = try await container.perform { (context: ModelContext) in
@@ -73,6 +105,9 @@ final class MLXChatService: LocalLLMService {
                 switch generation {
                 case .chunk(let text):
                     assembled += text
+                    if let onToken {
+                        await onToken(text)
+                    }
                 case .toolCall:
                     break
                 case .info:
@@ -92,18 +127,22 @@ final class MLXChatService: LocalLLMService {
     }
 
     #if canImport(MLX) && canImport(MLXLLM) && canImport(MLXLMCommon)
-    private func loadModelContainer(from directory: URL) async throws -> ModelContainer {
-        if let cachedContainer {
+    private func loadModelContainer(from directory: URL, cacheKey: String) async throws -> ModelContainer {
+        if let cachedContainer = cachedContainers[cacheKey] {
             return cachedContainer
         }
 
         let configuration = ModelConfiguration(directory: directory)
         let container = try await LLMModelFactory.shared.loadContainer(configuration: configuration)
-        cachedContainer = container
+        cachedContainers[cacheKey] = container
         return container
     }
 
-    private func buildChatMessages(history: [ChatMessage], latestUserInput: String) -> [Chat.Message] {
+    private func buildChatMessages(
+        history: [ChatMessage],
+        latestUserInput: String,
+        systemPrompt: String
+    ) -> [Chat.Message] {
         var messages: [Chat.Message] = [.init(role: .system, content: systemPrompt)]
         for message in history {
             let role: Chat.Message.Role = message.role == .assistant ? .assistant : .user

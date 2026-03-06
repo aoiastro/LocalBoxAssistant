@@ -1,5 +1,10 @@
 import Foundation
 
 protocol LocalLLMService {
-    func generateReply(history: [ChatMessage], userInput: String) async throws -> String
+    func generateReply(
+        history: [ChatMessage],
+        userInput: String,
+        options: GenerationOptions,
+        onToken: (@Sendable (String) async -> Void)?
+    ) async throws -> String
 }

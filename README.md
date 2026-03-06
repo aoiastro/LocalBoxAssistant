@@ -7,6 +7,11 @@
 - ローカル推論サービス層（`MLXChatService`）
 - XcodeGen ベースのプロジェクト定義（`project.yml`）
 - GitHub Actions での署名なし IPA 生成（AltStore 配布向け）
+- ストリーミング生成表示 / 生成停止 / 会話クリア
+- 生成パラメータ設定（Temperature, TopP, MaxTokens, Repetition, System Prompt）
+- JSON メモリ保存（会話と設定を永続化）
+- 複数会話の作成 / 切り替え / 削除
+- Hugging Face Model ID 指定ダウンロード（`mlx-community/...`）
 
 ## セットアップ
 1. XcodeGen をインストール
@@ -31,7 +36,11 @@ open LocalBoxAssistant.xcodeproj
 ### Hugging Face ダウンロード先
 - `Application Support/Models/<repo-idを--置換した名前>/`
 
-### 既定モデル
-- `mlx-community/Qwen2.5-1.5B-Instruct-4bit`
+### JSON メモリ保存先
+- `Application Support/LocalBoxAssistant/memory.json`
 
-必要なら `MLXChatService` 初期化時に `HFModelConfig` を差し替えて、`repoID` / `revision` / `files` / `token` を変更できます。
+### モデル指定
+- 設定画面で `Model ID` / `Revision` / `HF Token` を変更可能
+- 既定: `mlx-community/Qwen2.5-1.5B-Instruct-4bit` / `main`
+
+必要なモデルへ切り替えたら、次回送信時に自動でダウンロードされます。
