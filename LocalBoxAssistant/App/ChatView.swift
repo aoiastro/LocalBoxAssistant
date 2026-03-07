@@ -113,7 +113,7 @@ struct ChatView: View {
 
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
-                        viewModel.setRobotModeEnabled(!viewModel.isRobotModeEnabled)
+                        viewModel.toggleRobotModeFromToolbar()
                     } label: {
                         Image(systemName: viewModel.isRobotModeEnabled ? "dot.radiowaves.left.and.right" : "dot.radiowaves.left.and.right.slash")
                     }

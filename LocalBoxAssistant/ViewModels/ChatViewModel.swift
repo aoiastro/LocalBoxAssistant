@@ -73,6 +73,14 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
+    func toggleRobotModeFromToolbar() {
+        if isRobotModeEnabled {
+            setRobotModeEnabled(false)
+        } else {
+            setRobotModeEnabled(true)
+        }
+    }
+
     func startWakeWordListening() async {
         guard isRobotModeEnabled else { return }
         if speechToText.isListening { return }

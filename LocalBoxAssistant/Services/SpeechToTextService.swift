@@ -9,6 +9,7 @@ final class SpeechToTextService {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var isStarting = false
+    private var hasInstalledTap = false
 
     var isListening: Bool {
         audioEngine.isRunning
@@ -63,10 +64,14 @@ final class SpeechToTextService {
         guard format.sampleRate > 0 else {
             throw LocalLLMError.sttFailed("Invalid input audio format")
         }
-        inputNode.removeTap(onBus: 0)
+        if hasInstalledTap {
+            inputNode.removeTap(onBus: 0)
+            hasInstalledTap = false
+        }
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak request] buffer, _ in
             request?.append(buffer)
         }
+        hasInstalledTap = true
 
         audioEngine.prepare()
         try audioEngine.start()
@@ -85,8 +90,13 @@ final class SpeechToTextService {
     }
 
     func stopListening() {
-        audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        if hasInstalledTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            hasInstalledTap = false
+        }
         recognitionRequest?.endAudio()
         recognitionTask?.cancel()
         recognitionRequest = nil
