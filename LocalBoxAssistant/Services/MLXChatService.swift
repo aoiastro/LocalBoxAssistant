@@ -18,6 +18,8 @@ enum LocalLLMError: LocalizedError {
     case modelDownloadFailed(String)
     case generationFailed(String)
     case memoryStoreFailed(String)
+    case sttFailed(String)
+    case cameraFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -31,6 +33,10 @@ enum LocalLLMError: LocalizedError {
             return "生成に失敗しました: \(detail)"
         case .memoryStoreFailed(let detail):
             return "メモリ保存に失敗しました: \(detail)"
+        case .sttFailed(let detail):
+            return "音声認識に失敗しました: \(detail)"
+        case .cameraFailed(let detail):
+            return "カメラ処理に失敗しました: \(detail)"
         }
     }
 }
@@ -45,13 +51,20 @@ final class MLXChatService: LocalLLMService {
     init() {}
 
     func generateReply(history: [ChatMessage], userInput: String) async throws -> String {
-        try await generateReply(history: history, userInput: userInput, options: .default, onToken: nil)
+        try await generateReply(
+            history: history,
+            userInput: userInput,
+            options: .default,
+            userImageURLs: [],
+            onToken: nil
+        )
     }
 
     func generateReply(
         history: [ChatMessage],
         userInput: String,
         options: GenerationOptions,
+        userImageURLs: [URL],
         onToken: (@Sendable (String) async -> Void)?
     ) async throws -> String {
         let prompt = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -83,6 +96,7 @@ final class MLXChatService: LocalLLMService {
         let chatMessages = buildChatMessages(
             history: history,
             latestUserInput: prompt,
+            latestUserImages: userImageURLs,
             systemPrompt: options.systemPrompt
         )
         let input = UserInput(chat: chatMessages)
@@ -141,16 +155,19 @@ final class MLXChatService: LocalLLMService {
     private func buildChatMessages(
         history: [ChatMessage],
         latestUserInput: String,
+        latestUserImages: [URL],
         systemPrompt: String
     ) -> [Chat.Message] {
         var messages: [Chat.Message] = [.init(role: .system, content: systemPrompt)]
         for message in history {
             let role: Chat.Message.Role = message.role == .assistant ? .assistant : .user
-            messages.append(.init(role: role, content: message.text))
+            let images = message.imagePaths.map { UserInput.Image.url(URL(fileURLWithPath: $0)) }
+            messages.append(.init(role: role, content: message.text, images: images, videos: []))
         }
 
         if history.last?.text != latestUserInput || history.last?.role != .user {
-            messages.append(.init(role: .user, content: latestUserInput))
+            let images = latestUserImages.map { UserInput.Image.url($0) }
+            messages.append(.init(role: .user, content: latestUserInput, images: images, videos: []))
         }
 
         return messages

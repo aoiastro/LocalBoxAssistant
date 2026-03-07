@@ -20,6 +20,14 @@
   <string>1</string>
   <key>LSRequiresIPhoneOS</key>
   <true/>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>ウェイクワード検出と音声入力に使用します。</string>
+  <key>NSCameraUsageDescription</key>
+  <string>ウェイクワード検出時に前面カメラ画像を Vision LLM へ送るために使用します。</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>「箱」のウェイクワード検出と音声認識に使用します。</string>
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>Vision LLM に渡す画像を選択するために使用します。</string>
   <key>UIApplicationSupportsIndirectInputEvents</key>
   <true/>
   <key>UILaunchScreen</key>

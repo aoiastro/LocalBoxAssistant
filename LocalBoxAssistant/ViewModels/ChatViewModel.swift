@@ -12,6 +12,11 @@ final class ChatViewModel: ObservableObject {
     @Published var showSettings = false
     @Published var showConversationList = false
 
+    @Published var isRobotModeEnabled = false
+    @Published var robotState: RobotState = .idle
+    @Published var wakeTranscript = ""
+    @Published var selectedImageURL: URL?
+
     var currentMessages: [ChatMessage] {
         guard let currentIndex else { return [] }
         return conversations[currentIndex].messages
@@ -28,7 +33,11 @@ final class ChatViewModel: ObservableObject {
 
     private let service: LocalLLMService
     private let memoryStore = JSONMemoryStore()
+    private let speechToText = SpeechToTextService()
+    private let textToSpeech = TextToSpeechService()
+    private let frontCamera = FrontCameraCaptureService()
     private var generationTask: Task<Void, Never>?
+    private var isWakeWordTriggerInFlight = false
 
     private var currentIndex: Int? {
         guard let selectedConversationID else { return nil }
@@ -37,14 +46,54 @@ final class ChatViewModel: ObservableObject {
 
     init(service: LocalLLMService) {
         self.service = service
-
         Task {
             await loadMemory()
         }
     }
 
+    func setSelectedImageURL(_ url: URL?) {
+        selectedImageURL = url
+    }
+
+    func setRobotModeEnabled(_ enabled: Bool) {
+        isRobotModeEnabled = enabled
+        if enabled {
+            Task {
+                await startWakeWordListening()
+            }
+        } else {
+            stopWakeWordListening()
+            textToSpeech.stop()
+            robotState = .idle
+        }
+    }
+
+    func startWakeWordListening() async {
+        do {
+            try await speechToText.requestPermissions()
+            try speechToText.startListening { [weak self] text in
+                Task { @MainActor in
+                    self?.handleWakeWordTranscript(text)
+                }
+            }
+            robotState = .listening
+        } catch {
+            errorText = error.localizedDescription
+            robotState = .idle
+        }
+    }
+
+    func stopWakeWordListening() {
+        speechToText.stopListening()
+        wakeTranscript = ""
+    }
+
     func send() {
-        let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        sendInternal(userInput: inputText, fromWakeWord: false, attachedImageURLs: nil)
+    }
+
+    private func sendInternal(userInput: String, fromWakeWord: Bool, attachedImageURLs: [URL]?) {
+        let trimmed = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isGenerating else { return }
 
         guard let conversationID = ensureActiveConversation(),
@@ -53,7 +102,13 @@ final class ChatViewModel: ObservableObject {
         }
 
         let now = Date()
-        let userMessage = ChatMessage(role: .user, text: trimmed, createdAt: now)
+        let imageURLs: [URL] = attachedImageURLs ?? (selectedImageURL.map { [$0] } ?? [])
+        let userMessage = ChatMessage(
+            role: .user,
+            text: trimmed,
+            createdAt: now,
+            imagePaths: imageURLs.map(\.path)
+        )
 
         conversations[conversationIndex].messages.append(userMessage)
         conversations[conversationIndex].updatedAt = now
@@ -70,15 +125,21 @@ final class ChatViewModel: ObservableObject {
         inputText = ""
         isGenerating = true
         errorText = nil
+        robotState = .thinking
         persistSnapshot()
 
-        let selectedOptions = options
+        var selectedOptions = options
+        if fromWakeWord {
+            selectedOptions.modelID = options.robotVisionModelID
+        }
+
         generationTask = Task {
             do {
                 let reply = try await service.generateReply(
                     history: requestHistory,
                     userInput: trimmed,
-                    options: selectedOptions
+                    options: selectedOptions,
+                    userImageURLs: imageURLs
                 ) { token in
                     await MainActor.run {
                         self.appendToken(
@@ -95,13 +156,27 @@ final class ChatViewModel: ObservableObject {
                 }
                 touchConversation(conversationID)
                 persistSnapshot()
+
+                if isRobotModeEnabled && options.robotAutoSpeak {
+                    robotState = .speaking
+                    textToSpeech.speak(reply) { [weak self] in
+                        Task { @MainActor in
+                            guard let self else { return }
+                            self.robotState = self.isRobotModeEnabled ? .listening : .idle
+                        }
+                    }
+                } else {
+                    robotState = isRobotModeEnabled ? .listening : .idle
+                }
             } catch is CancellationError {
                 cleanupEmptyAssistantMessage(conversationID: conversationID, assistantMessageID: assistantMessageID)
                 persistSnapshot()
+                robotState = isRobotModeEnabled ? .listening : .idle
             } catch {
                 cleanupEmptyAssistantMessage(conversationID: conversationID, assistantMessageID: assistantMessageID)
                 errorText = error.localizedDescription
                 persistSnapshot()
+                robotState = isRobotModeEnabled ? .listening : .idle
             }
 
             isGenerating = false
@@ -113,6 +188,7 @@ final class ChatViewModel: ObservableObject {
         generationTask?.cancel()
         generationTask = nil
         isGenerating = false
+        robotState = isRobotModeEnabled ? .listening : .idle
     }
 
     func clearCurrentConversation() {
@@ -172,6 +248,37 @@ final class ChatViewModel: ObservableObject {
 
     func persistOptionsChange() {
         persistSnapshot()
+    }
+
+    private func handleWakeWordTranscript(_ text: String) {
+        wakeTranscript = text
+        guard isRobotModeEnabled, !isGenerating else { return }
+
+        let wake = options.wakeWord.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !wake.isEmpty else { return }
+        guard text.contains(wake) else { return }
+
+        let command = extractCommand(from: text, wakeWord: wake)
+        guard !command.isEmpty else { return }
+        guard !isWakeWordTriggerInFlight else { return }
+        isWakeWordTriggerInFlight = true
+
+        Task {
+            defer { self.isWakeWordTriggerInFlight = false }
+            do {
+                let frontImageURL = try await frontCamera.captureFrontPhoto()
+                selectedImageURL = frontImageURL
+                sendInternal(userInput: command, fromWakeWord: true, attachedImageURLs: [frontImageURL])
+            } catch {
+                errorText = error.localizedDescription
+            }
+        }
+    }
+
+    private func extractCommand(from text: String, wakeWord: String) -> String {
+        guard let range = text.range(of: wakeWord, options: .backwards) else { return "" }
+        let suffix = text[range.upperBound...]
+        return suffix.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func loadMemory() async {

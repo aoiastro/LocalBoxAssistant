@@ -1,12 +1,20 @@
+import PhotosUI
 import SwiftUI
 import UIKit
 
 struct ChatView: View {
     @StateObject var viewModel: ChatViewModel
+    @State private var selectedPhotoItem: PhotosPickerItem?
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                if viewModel.isRobotModeEnabled {
+                    robotHeader
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+                }
+
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 10) {
@@ -33,7 +41,35 @@ struct ChatView: View {
                         .padding(.top, 6)
                 }
 
+                if let selectedImageURL = viewModel.selectedImageURL,
+                   let image = UIImage(contentsOfFile: selectedImageURL.path) {
+                    HStack {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 56, height: 56)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        Text(selectedImageURL.lastPathComponent)
+                            .font(.caption)
+                            .lineLimit(1)
+                        Spacer()
+                        Button("Remove") {
+                            viewModel.setSelectedImageURL(nil)
+                            selectedPhotoItem = nil
+                        }
+                        .font(.caption)
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                }
+
                 HStack(spacing: 8) {
+                    PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                        Image(systemName: "photo")
+                            .font(.title3)
+                            .frame(width: 30, height: 30)
+                    }
+
                     TextField("メッセージを入力", text: $viewModel.inputText, axis: .vertical)
                         .lineLimit(1...5)
                         .textFieldStyle(.roundedBorder)
@@ -76,6 +112,12 @@ struct ChatView: View {
                 }
 
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button {
+                        viewModel.setRobotModeEnabled(!viewModel.isRobotModeEnabled)
+                    } label: {
+                        Image(systemName: viewModel.isRobotModeEnabled ? "dot.radiowaves.left.and.right" : "dot.radiowaves.left.and.right.slash")
+                    }
+
                     Button("Clear") {
                         viewModel.clearCurrentConversation()
                     }
@@ -94,6 +136,41 @@ struct ChatView: View {
             }
             .sheet(isPresented: $viewModel.showConversationList) {
                 ConversationListView(viewModel: viewModel)
+            }
+            .onChange(of: selectedPhotoItem) {
+                Task {
+                    await loadSelectedPhoto()
+                }
+            }
+        }
+    }
+
+    private var robotHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            RobotFaceView(state: viewModel.robotState)
+            Text("Wake Word: \(viewModel.options.wakeWord)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(viewModel.wakeTranscript.isEmpty ? "待機中..." : viewModel.wakeTranscript)
+                .font(.caption)
+                .lineLimit(1)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func loadSelectedPhoto() async {
+        guard let selectedPhotoItem else { return }
+        do {
+            guard let data = try await selectedPhotoItem.loadTransferable(type: Data.self) else { return }
+            let tempURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("robot-image-\(UUID().uuidString).jpg")
+            try data.write(to: tempURL, options: .atomic)
+            await MainActor.run {
+                viewModel.setSelectedImageURL(tempURL)
+            }
+        } catch {
+            await MainActor.run {
+                viewModel.errorText = error.localizedDescription
             }
         }
     }
@@ -133,6 +210,12 @@ struct ChatView: View {
                                 UIPasteboard.general.string = message.text
                             }
                         }
+
+                    if !message.imagePaths.isEmpty {
+                        Text("+ image")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
@@ -210,6 +293,14 @@ private struct SettingsView: View {
                     SecureField("HF Token (optional)", text: $options.hfToken)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
+                }
+
+                Section("Robot") {
+                    TextField("Wake Word", text: $options.wakeWord)
+                    TextField("Vision Model ID", text: $options.robotVisionModelID)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
+                    Toggle("Auto Speak", isOn: $options.robotAutoSpeak)
                 }
 
                 Section("Sampling") {

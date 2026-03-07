@@ -12,6 +12,8 @@
 - JSON メモリ保存（会話と設定を永続化）
 - 複数会話の作成 / 切り替え / 削除
 - Hugging Face Model ID 指定ダウンロード（`mlx-community/...`）
+- Robot モード（STT + WakeWord「箱」+ TTS + 図形フェイス表示）
+- Vision LLM 用画像入力（Photos から選択）
 
 ## セットアップ
 1. XcodeGen をインストール
@@ -42,5 +44,6 @@ open LocalBoxAssistant.xcodeproj
 ### モデル指定
 - 設定画面で `Model ID` / `Revision` / `HF Token` を変更可能
 - 既定: `mlx-community/Qwen2.5-1.5B-Instruct-4bit` / `main`
+- Robot Vision 既定: `mlx-community/LFM2.5-VL-1.6B-4bit`
 
 必要なモデルへ切り替えたら、次回送信時に自動でダウンロードされます。
