@@ -37,6 +37,7 @@ final class ChatViewModel: ObservableObject {
     private let textToSpeech = TextToSpeechService()
     private let frontCamera = FrontCameraCaptureService()
     private var generationTask: Task<Void, Never>?
+    private var wakeWordTask: Task<Void, Never>?
     private var isWakeWordTriggerInFlight = false
 
     private var currentIndex: Int? {
@@ -56,12 +57,16 @@ final class ChatViewModel: ObservableObject {
     }
 
     func setRobotModeEnabled(_ enabled: Bool) {
+        guard isRobotModeEnabled != enabled else { return }
         isRobotModeEnabled = enabled
         if enabled {
-            Task {
+            wakeWordTask?.cancel()
+            wakeWordTask = Task {
                 await startWakeWordListening()
             }
         } else {
+            wakeWordTask?.cancel()
+            wakeWordTask = nil
             stopWakeWordListening()
             textToSpeech.stop()
             robotState = .idle
@@ -69,6 +74,8 @@ final class ChatViewModel: ObservableObject {
     }
 
     func startWakeWordListening() async {
+        guard isRobotModeEnabled else { return }
+        if speechToText.isListening { return }
         do {
             try await speechToText.requestPermissions()
             try speechToText.startListening { [weak self] text in

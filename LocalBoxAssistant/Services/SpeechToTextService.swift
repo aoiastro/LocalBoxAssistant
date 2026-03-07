@@ -8,6 +8,7 @@ final class SpeechToTextService {
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "ja-JP"))
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
+    private var isStarting = false
 
     var isListening: Bool {
         audioEngine.isRunning
@@ -34,11 +35,21 @@ final class SpeechToTextService {
     }
 
     func startListening(onPartial: @escaping @Sendable (String) -> Void) throws {
+        if isStarting || audioEngine.isRunning {
+            return
+        }
+        isStarting = true
+        defer { isStarting = false }
+
         stopListening()
 
         guard let recognizer, recognizer.isAvailable else {
             throw LocalLLMError.sttFailed("Speech recognizer unavailable")
         }
+
+        let audioSession = AVAudioSession.sharedInstance()
+        try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker])
+        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
@@ -49,6 +60,9 @@ final class SpeechToTextService {
         recognitionRequest = request
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
+        guard format.sampleRate > 0 else {
+            throw LocalLLMError.sttFailed("Invalid input audio format")
+        }
         inputNode.removeTap(onBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak request] buffer, _ in
             request?.append(buffer)
@@ -77,6 +91,7 @@ final class SpeechToTextService {
         recognitionTask?.cancel()
         recognitionRequest = nil
         recognitionTask = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     private func restartIfNeeded(onPartial: @escaping @Sendable (String) -> Void) {
