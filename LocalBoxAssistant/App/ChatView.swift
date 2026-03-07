@@ -129,7 +129,13 @@ struct ChatView: View {
                 }
             }
             .sheet(isPresented: $viewModel.showSettings) {
-                SettingsView(options: $viewModel.options) {
+                SettingsView(
+                    options: $viewModel.options,
+                    isRobotModeEnabled: $viewModel.isRobotModeEnabled,
+                    onRobotModeChanged: { enabled in
+                        viewModel.setRobotModeEnabled(enabled)
+                    }
+                ) {
                     viewModel.persistOptionsChange()
                     viewModel.showSettings = false
                 }
@@ -278,6 +284,8 @@ private struct ConversationListView: View {
 
 private struct SettingsView: View {
     @Binding var options: GenerationOptions
+    @Binding var isRobotModeEnabled: Bool
+    let onRobotModeChanged: (Bool) -> Void
     let onDone: () -> Void
 
     var body: some View {
@@ -296,6 +304,10 @@ private struct SettingsView: View {
                 }
 
                 Section("Robot") {
+                    Toggle("Robot Mode", isOn: $isRobotModeEnabled)
+                        .onChange(of: isRobotModeEnabled) {
+                            onRobotModeChanged(isRobotModeEnabled)
+                        }
                     TextField("Wake Word", text: $options.wakeWord)
                     TextField("Vision Model ID", text: $options.robotVisionModelID)
                         .textInputAutocapitalization(.never)
