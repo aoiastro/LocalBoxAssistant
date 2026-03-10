@@ -33,6 +33,7 @@ targets:
       base:
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: true
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        CODE_SIGN_ENTITLEMENTS: LocalBoxAssistant/LocalBoxAssistant.entitlements
     dependencies:
       - package: mlx-swift-lm
         product: MLXLMCommon

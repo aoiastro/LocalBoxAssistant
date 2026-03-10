@@ -18,8 +18,6 @@ enum LocalLLMError: LocalizedError {
     case modelDownloadFailed(String)
     case generationFailed(String)
     case memoryStoreFailed(String)
-    case sttFailed(String)
-    case cameraFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -33,10 +31,6 @@ enum LocalLLMError: LocalizedError {
             return "生成に失敗しました: \(detail)"
         case .memoryStoreFailed(let detail):
             return "メモリ保存に失敗しました: \(detail)"
-        case .sttFailed(let detail):
-            return "音声認識に失敗しました: \(detail)"
-        case .cameraFailed(let detail):
-            return "カメラ処理に失敗しました: \(detail)"
         }
     }
 }
@@ -172,5 +166,6 @@ final class MLXChatService: LocalLLMService {
 
         return messages
     }
+
     #endif
 }

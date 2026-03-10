@@ -9,12 +9,6 @@ struct ChatView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if viewModel.isRobotModeEnabled {
-                    robotHeader
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-                }
-
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 10) {
@@ -112,12 +106,6 @@ struct ChatView: View {
                 }
 
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button {
-                        viewModel.toggleRobotModeFromToolbar()
-                    } label: {
-                        Image(systemName: viewModel.isRobotModeEnabled ? "dot.radiowaves.left.and.right" : "dot.radiowaves.left.and.right.slash")
-                    }
-
                     Button("Clear") {
                         viewModel.clearCurrentConversation()
                     }
@@ -129,13 +117,7 @@ struct ChatView: View {
                 }
             }
             .sheet(isPresented: $viewModel.showSettings) {
-                SettingsView(
-                    options: $viewModel.options,
-                    isRobotModeEnabled: $viewModel.isRobotModeEnabled,
-                    onRobotModeChanged: { enabled in
-                        viewModel.setRobotModeEnabled(enabled)
-                    }
-                ) {
+                SettingsView(options: $viewModel.options) {
                     viewModel.persistOptionsChange()
                     viewModel.showSettings = false
                 }
@@ -151,25 +133,12 @@ struct ChatView: View {
         }
     }
 
-    private var robotHeader: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            RobotFaceView(state: viewModel.robotState)
-            Text("Wake Word: \(viewModel.options.wakeWord)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(viewModel.wakeTranscript.isEmpty ? "待機中..." : viewModel.wakeTranscript)
-                .font(.caption)
-                .lineLimit(1)
-                .foregroundStyle(.secondary)
-        }
-    }
-
     private func loadSelectedPhoto() async {
         guard let selectedPhotoItem else { return }
         do {
             guard let data = try await selectedPhotoItem.loadTransferable(type: Data.self) else { return }
             let tempURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("robot-image-\(UUID().uuidString).jpg")
+                .appendingPathComponent("image-\(UUID().uuidString).jpg")
             try data.write(to: tempURL, options: .atomic)
             await MainActor.run {
                 viewModel.setSelectedImageURL(tempURL)
@@ -284,8 +253,6 @@ private struct ConversationListView: View {
 
 private struct SettingsView: View {
     @Binding var options: GenerationOptions
-    @Binding var isRobotModeEnabled: Bool
-    let onRobotModeChanged: (Bool) -> Void
     let onDone: () -> Void
 
     var body: some View {
@@ -303,25 +270,13 @@ private struct SettingsView: View {
                         .autocorrectionDisabled(true)
                 }
 
-                Section("Robot") {
-                    Toggle("Robot Mode", isOn: $isRobotModeEnabled)
-                        .onChange(of: isRobotModeEnabled) {
-                            onRobotModeChanged(isRobotModeEnabled)
-                        }
-                    TextField("Wake Word", text: $options.wakeWord)
-                    TextField("Vision Model ID", text: $options.robotVisionModelID)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled(true)
-                    Toggle("Auto Speak", isOn: $options.robotAutoSpeak)
-                }
-
                 Section("Sampling") {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Temperature: \(options.temperature, specifier: "%.2f")")
+                        Text("Temperature: \(options.temperature, specifier: \"%.2f\")")
                         Slider(value: $options.temperature, in: 0...1.5, step: 0.05)
                     }
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Top P: \(options.topP, specifier: "%.2f")")
+                        Text("Top P: \(options.topP, specifier: \"%.2f\")")
                         Slider(value: $options.topP, in: 0.1...1.0, step: 0.05)
                     }
                 }
@@ -335,7 +290,7 @@ private struct SettingsView: View {
                         step: 32
                     )
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Repetition Penalty: \(options.repetitionPenalty, specifier: "%.2f")")
+                        Text("Repetition Penalty: \(options.repetitionPenalty, specifier: \"%.2f\")")
                         Slider(value: $options.repetitionPenalty, in: 1.0...1.5, step: 0.01)
                     }
                 }

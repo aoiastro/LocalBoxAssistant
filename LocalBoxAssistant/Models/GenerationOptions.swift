@@ -10,9 +10,6 @@ struct GenerationOptions: Codable, Equatable {
     var modelID: String
     var modelRevision: String
     var hfToken: String
-    var wakeWord: String
-    var robotVisionModelID: String
-    var robotAutoSpeak: Bool
 
     static let `default` = GenerationOptions(
         temperature: 0.7,
@@ -23,10 +20,7 @@ struct GenerationOptions: Codable, Equatable {
         systemPrompt: "あなたは端的で正確なアシスタントです。",
         modelID: "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
         modelRevision: "main",
-        hfToken: "",
-        wakeWord: "箱",
-        robotVisionModelID: "mlx-community/LFM2.5-VL-1.6B-4bit",
-        robotAutoSpeak: true
+        hfToken: ""
     )
 
     enum CodingKeys: String, CodingKey {
@@ -39,9 +33,6 @@ struct GenerationOptions: Codable, Equatable {
         case modelID
         case modelRevision
         case hfToken
-        case wakeWord
-        case robotVisionModelID
-        case robotAutoSpeak
     }
 
     init(
@@ -53,10 +44,7 @@ struct GenerationOptions: Codable, Equatable {
         systemPrompt: String,
         modelID: String,
         modelRevision: String,
-        hfToken: String,
-        wakeWord: String,
-        robotVisionModelID: String,
-        robotAutoSpeak: Bool
+        hfToken: String
     ) {
         self.temperature = temperature
         self.topP = topP
@@ -67,9 +55,6 @@ struct GenerationOptions: Codable, Equatable {
         self.modelID = modelID
         self.modelRevision = modelRevision
         self.hfToken = hfToken
-        self.wakeWord = wakeWord
-        self.robotVisionModelID = robotVisionModelID
-        self.robotAutoSpeak = robotAutoSpeak
     }
 
     init(from decoder: Decoder) throws {
@@ -84,8 +69,5 @@ struct GenerationOptions: Codable, Equatable {
         modelID = try container.decodeIfPresent(String.self, forKey: .modelID) ?? d.modelID
         modelRevision = try container.decodeIfPresent(String.self, forKey: .modelRevision) ?? d.modelRevision
         hfToken = try container.decodeIfPresent(String.self, forKey: .hfToken) ?? d.hfToken
-        wakeWord = try container.decodeIfPresent(String.self, forKey: .wakeWord) ?? d.wakeWord
-        robotVisionModelID = try container.decodeIfPresent(String.self, forKey: .robotVisionModelID) ?? d.robotVisionModelID
-        robotAutoSpeak = try container.decodeIfPresent(Bool.self, forKey: .robotAutoSpeak) ?? d.robotAutoSpeak
     }
 }
